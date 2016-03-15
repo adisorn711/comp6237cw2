@@ -1,11 +1,16 @@
 from HTMLParser import HTMLParser
 import copy
 import collections
+import re
+from nltk.corpus import words
+
+en_words = set(words.words())
 
 class CustomeCollection(object):
 
     def __init__(self):
         self.__dic = collections.OrderedDict()
+        self.__raw_texts = []
 
     def add_object_for_key(self, key, obj):
         self.__dic[key] = obj
@@ -18,10 +23,18 @@ class CustomeCollection(object):
 
     def clear_collection(self):
         self.__dic = dict()
+        self.__raw_texts = []
+
+    def append_raw_text(self, text):
+        self.__raw_texts.append(text)
 
     @property
     def bag_of_words(self):
         return copy.deepcopy(self.__dic)
+
+    @property
+    def raw_texts(self):
+        return '\n'.join(self.__raw_texts)
 
     @property
     def number_of_keys(self):
@@ -46,8 +59,18 @@ class SimpleParser(HTMLParser):
     def handle_data(self, data):
         d = data.strip()
         if len(d) >= 3:
+            letters_only = re.sub("[^a-zA-Z]", " ", data)
+            lower_word = letters_only.lower()
+
+            # need to check inner spaces like 'a    xxxx'
+            all_words = lower_word.split(' ')
+            pre_processing_words = [w for w in all_words if len(w) > 3 and w in en_words]
+
+            for w in pre_processing_words:
+                collection.increase_value_for_key(w)
+                collection.append_raw_text(w)
             #print "Encountered some data  :", data
-            collection.increase_value_for_key(data)
+
 
     def feed_parser(self, data):
         self.feed(data)
@@ -61,6 +84,10 @@ class SimpleParser(HTMLParser):
     @property
     def output(self):
         return collection.bag_of_words
+
+    @property
+    def raw_output(self):
+        return collection.raw_texts
 
     @property
     def get_number_of_keys(self):

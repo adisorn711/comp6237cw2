@@ -29,6 +29,10 @@ class DataReader():
     def data(self):
         return self.__parser.output
 
+    @property
+    def raw_data(self):
+        return self.__parser.raw_output
+
 class DataWriter():
 
     def __init__(self):
@@ -37,6 +41,12 @@ class DataWriter():
     def writeDataToFile(self, json_data, path):
         with open(path, 'w+') as f:
             json.dump(json_data, f)
+            f.close()
+
+    def write_txt_to_file(self, txt, path):
+        with open(path, 'w+') as f:
+            f.write(txt)
+            f.close()
 
     def create_path_if_not_exists(self, path):
         if not os.path.exists(path):

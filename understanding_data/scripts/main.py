@@ -30,9 +30,12 @@ def main():
             res = data_reader.data
             out_path = DataWriter.string_path_by_appending_string(new_dir, 'out.json')
             data_writer.writeDataToFile(res, out_path)
+
+            res = data_reader.raw_data
+            out_path2 = DataWriter.string_path_by_appending_string(new_dir, 'raw.txt')
+            data_writer.write_txt_to_file(res, out_path2)
+
             data_reader.reset_bag()
-
-
 
 
 if __name__ == '__main__':
