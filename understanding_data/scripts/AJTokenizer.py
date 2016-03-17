@@ -8,9 +8,11 @@ import string
 import collections
 import pprint
 import nltk
+from nltk.corpus import words
 from nltk.corpus import stopwords
 from nltk.stem.snowball import SnowballStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.externals import joblib
 from sklearn.cluster import KMeans
@@ -22,6 +24,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 MDS()
+en_words = set(words.words())
+en_stopwords = set(stopwords.words("english"))
 
 titles = ['Dictionary of Greek and Roman geography',
           'The History of Tacitus Book I',
@@ -59,6 +63,16 @@ def tokenize_and_stem(text):
     stems = [stemmer.stem(t) for t in filtered_tokens]
     return stems
 
+def tokenize_only(text):
+    # first tokenize by sentence, then by word to ensure that punctuation is caught as it's own token
+    tokens = [word.lower() for sent in nltk.sent_tokenize(text) for word in nltk.word_tokenize(sent)]
+    filtered_tokens = []
+    # filter out any tokens not containing letters (e.g., numeric tokens, raw punctuation)
+    for token in tokens:
+        if re.search('[a-zA-Z]', token):
+            filtered_tokens.append(token)
+    return filtered_tokens
+
 class AJBaseTextObject(object):
 
     def __init__(self, title, contents, raw_text=''):
@@ -80,7 +94,7 @@ class AJBaseTextObject(object):
 
     @property
     def texts(self):
-        return self.__raw_texts
+        return self.__raw_texts.decode("utf-8")
 
 class AJTextClassification(object):
 
@@ -100,8 +114,33 @@ class AJTextClassification(object):
         features = []
         for book in self.__books:
             features.append(len(book.words))
+        if len(features) == 0:
+            self.__no_of_features = 0
+        else:
+            self.__no_of_features = max(features)
 
-        self.__no_of_features = max(features)
+    def print_word_count(self):
+        _words = []
+        for book in self.__books:
+            text_arr = book.texts.strip().split()
+            count = 0
+            for w in text_arr:
+                if len(w) > 0:
+                    count += 1
+
+            _words.append(count)
+
+        print _words
+
+    def print_word_count_after_tokenization(self):
+        _words = []
+        for book in self.__books:
+            text = book.texts.decode("utf-8").strip()
+            res = tokenize_and_stem(text)
+            _words.append(len(res))
+
+        print _words
+
 
     # read from json and return in Dictionary { Txt : Int }
     def read_data_from_path(self, data_path):
@@ -152,22 +191,26 @@ class AJTextClassification(object):
 
             if len(json_files) > 0:
                 f = ''
+                f_raw = ''
                 for f_name in json_files:
-                    if f_name.endswith('.txt'):
+                    if f_name.endswith('.json'):
                         f = f_name
-                        break
+                    if f_name.endswith('.txt'):
+                        f_raw = f_name
 
                 #dic = self.read_data_from_path(os.path.join(root_path, d, f))
-                raw_txt = self.read_raw_text_from_path(os.path.join(root_path, d, f))
+                raw_txt = self.read_raw_text_from_path(os.path.join(root_path, d, f_raw))
                 #print len(dic)
                 #res = self.review_to_words(dic)
-                print len(raw_txt)
+                #print len(raw_txt)
 
                 book = AJBaseTextObject(f, {}, raw_text=raw_txt)
                 self.add_book(book)
 
         self.compute_max_features()
         print "Max features is {}".format(self.__no_of_features)
+        #self.print_word_count()
+        #self.print_word_count_after_tokenization()
 
     def create_index_of_words(self):
         for book in self.__books:
@@ -190,9 +233,17 @@ class AJTextClassification(object):
         tfidf_matrix = None
         if saved_file_name not in files:
             #define vectorizer parameters
-            tfidf_vectorizer = TfidfVectorizer(max_df=0.9, max_features=25000,
-                                             min_df=0, stop_words='english',
-                                             use_idf=True, tokenizer=tokenize_and_stem, ngram_range=(1,3))
+            tfidf_vectorizer = TfidfVectorizer(max_df=0.9, max_features=250000,
+                                             min_df=0.01, stop_words='english',
+                                             use_idf=True, tokenizer=tokenize_and_stem, ngram_range=(1, 1))
+            """
+            tfidf_vectorizer = CountVectorizer( analyzer = "word",   \
+                                                tokenizer = tokenize_and_stem,    \
+                                                preprocessor = None, \
+                                                stop_words = 'english',   \
+                                                lowercase=True, \
+                                                max_features=250000)
+            """
 
             books = []
             for book in self.__books:
@@ -210,6 +261,23 @@ class AJTextClassification(object):
         self.__dist_matrix = 1 - cosine_similarity(self.tf_idf_matrix)
         print self.__dist_matrix
 
+        """
+        synopes = []
+        for book in self.__books:
+            synopes.append(book.texts)
+        #not super pythonic, no, not at all.
+        #use extend so it's a big flat list of vocab
+        for i in synopes:
+            allwords_stemmed = tokenize_and_stem(i) #for each item in 'synopses', tokenize/stem
+            totalvocab_stemmed.extend(allwords_stemmed) #extend the 'totalvocab_stemmed' list
+
+            allwords_tokenized = tokenize_only(i)
+            totalvocab_tokenized.extend(allwords_tokenized)
+
+        vocab_frame = pd.DataFrame({'words': totalvocab_tokenized}, index = totalvocab_stemmed)
+        print 'there are ' + str(vocab_frame.shape[0]) + ' items in vocab_frame'
+        """
+
     def k_mean_clustering(self, n_clusters=5):
         num_clusters = n_clusters
 
@@ -217,6 +285,19 @@ class AJTextClassification(object):
         km.fit(self.tf_idf_matrix)
         clusters = km.labels_.tolist()
         print clusters
+
+
+        synopses = []
+        for book in self.__books:
+            synopses.append(book.texts)
+
+        books = { 'title': titles, 'synopsis': synopses, 'cluster': clusters}
+
+        frame = pd.DataFrame(books, index = [clusters] , columns = ['title', 'cluster'])
+        print frame['cluster'].value_counts()
+        #grouped = frame['title'].groupby(frame['cluster']) #groupby cluster for aggregation purposes
+
+        #print grouped.mean() #average rank (1 to 100) per cluster
 
         # convert two components as we're plotting points in a two-dimensional plane
         # "precomputed" because we provide a distance matrix
@@ -232,11 +313,11 @@ class AJTextClassification(object):
         cluster_colors = {0: '#1b9e77', 1: '#d95f02', 2: '#7570b3', 3: '#e7298a', 4: '#66a61e'}
 
         #set up cluster names using a dict
-        cluster_names = {0: 'Family, home, war',
-                         1: 'Police, killed, murders',
-                         2: 'Father, New York, brothers',
-                         3: 'Dance, singing, love',
-                         4: 'Killed, soldiers, captain'}
+        cluster_names = {0: 'Group 1',
+                         1: 'Group 2',
+                         2: 'Group 3',
+                         3: 'Group 4',
+                         4: 'Group 5'}
 
         #create data frame that has the result of the MDS plus the cluster numbers and titles
         df = pd.DataFrame(dict(x=xs, y=ys, label=clusters, title=titles))
@@ -310,9 +391,8 @@ stemmer = SnowballStemmer("english")
 if __name__ == '__main__':
     my_classification = AJTextClassification()
     my_classification.run()
-    my_classification.create_index_of_words()
     my_classification.tf_idf()
-    my_classification.k_mean_clustering(5)
+    my_classification.k_mean_clustering(4)
     my_classification.hierachical_clustering()
 
 

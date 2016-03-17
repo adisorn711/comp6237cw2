@@ -3,8 +3,11 @@ import copy
 import collections
 import re
 from nltk.corpus import words
+from nltk.corpus import stopwords
+from bs4 import BeautifulSoup
 
 en_words = set(words.words())
+en_stopwords = set(stopwords.words("english"))
 
 class CustomeCollection(object):
 
@@ -34,7 +37,7 @@ class CustomeCollection(object):
 
     @property
     def raw_texts(self):
-        return '\n'.join(self.__raw_texts)
+        return self.__raw_texts
 
     @property
     def number_of_keys(self):
@@ -64,11 +67,13 @@ class SimpleParser(HTMLParser):
 
             # need to check inner spaces like 'a    xxxx'
             all_words = lower_word.split(' ')
-            pre_processing_words = [w for w in all_words if len(w) > 3 and w in en_words]
+            pre_processing_words = [w for w in all_words if len(w) >= 3 and w in en_words]
+            #pre_processing_words = [w for w in all_words if len(w) >= 3]
 
             for w in pre_processing_words:
-                collection.increase_value_for_key(w)
-                collection.append_raw_text(w)
+                if w not in en_stopwords:
+                    collection.increase_value_for_key(w)
+                    collection.append_raw_text(w)
             #print "Encountered some data  :", data
 
 
@@ -92,6 +97,38 @@ class SimpleParser(HTMLParser):
     @property
     def get_number_of_keys(self):
         return collection.number_of_keys
+
+class BeautifulSoapParser(object):
+
+    def __init__(self):
+        self.__texts = []
+        self.__html = ''
+
+    def feed_parser(self, data):
+        self.__html = data
+
+        soup = BeautifulSoup(data, 'html.parser')
+        self.__texts.append(soup.get_text().encode("utf-8"))
+
+    def reset_parser(self):
+        self.__html = ''
+
+    def clear_bag(self):
+        self.__texts = []
+        self.__html = ''
+
+    @property
+    def output(self):
+        return collection.bag_of_words
+
+    @property
+    def raw_output(self):
+        return '\n'.join(self.__texts)
+
+    @property
+    def get_number_of_keys(self):
+        return collection.number_of_keys
+
 
 # instantiate the parser and fed it some HTML
 """

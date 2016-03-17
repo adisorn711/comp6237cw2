@@ -27,9 +27,11 @@ def main():
                 html_file_path = DataWriter.string_path_by_appending_string(next_path, f_name)
                 data_reader.readDataFromPath(html_file_path)
 
+            """
             res = data_reader.data
             out_path = DataWriter.string_path_by_appending_string(new_dir, 'out.json')
             data_writer.writeDataToFile(res, out_path)
+            """
 
             res = data_reader.raw_data
             out_path2 = DataWriter.string_path_by_appending_string(new_dir, 'raw.txt')

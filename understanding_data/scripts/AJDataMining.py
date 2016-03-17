@@ -8,7 +8,8 @@ WR_PATH = "../db"
 class DataReader():
 
     def __init__(self):
-        self.__parser = SimpleParser()
+        #self.__parser = SimpleParser()
+        self.__parser = BeautifulSoapParser()
 
     def readDataFromPath(self, path):
         f = open(path, 'r')
